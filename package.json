@@ -1,0 +1,16 @@
+{
+  "name": "script",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "author": "Hossein Calao",
+  "license": "ISC",
+  "dependencies": {
+    "excel": "^1.0.1",
+    "mysql2": "^2.1.0",
+    "xlsx": "^0.16.5"
+  }
+}
