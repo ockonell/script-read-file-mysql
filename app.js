@@ -34,7 +34,7 @@ async function leer_e_insertar() {
 		for (let i = 0; i < dataSheet1.length; i++) {
 			antes_desps.antes.push((dataSheet1[i]['ORIGEN']).trim());
 			antes_desps.desps.push((dataSheet1[i]['DESTINO']).trim());
-			if(dataSheet1[i]['HCP']){antes_desps.hcp.push((dataSheet1[i]['HCP']).trim());}
+			if(dataSheet1[i]['HCP']){antes_desps.hcp.push((dataSheet1[i]['HCP']).trimEnd());}
 		}
 
 		// NUEVAS ESPECIALIDADES
@@ -124,7 +124,7 @@ async function leer_e_insertar() {
 		console.log('/////////////////////////////////////////////////////////////////////');
 		console.log('\n\n\n-----------------------------         -------------------------\n\n\n');
 
-		// BUSCAR TODAS LAS ESPECIALIDADES RELACIONADAS CON LOS CASOS CLINICOS
+		// BUSCAR TODAS LAS ESPECIALIDADES RELACIONADAS DE LOS CASOS CLINICOS
 		[rows] = await connection.query(
 			`SELECT ccs.speciality_id AS id, s.name AS nombre, ccs.clinical_case_id AS cc
 			FROM specialities s, clinical_case_specialities ccs
@@ -157,8 +157,8 @@ async function leer_e_insertar() {
 
 		// ELIMINAR LOS CASOS CLINICOS CON ESPECIALIDADES ANTIGUAS
 		console.log('\n//////////////      ELIMINANDO LOS CASOS CLINICOS CON ESPECIALIDADES ANTIGUAS...     ///////////////');
-		r = await connection.query( `DELETE FROM clinical_case_specialities WHERE speciality_id < '112';` );
-		console.log('Nº FILAS ELIMINADAS',r[0]. affectedRows);
+		r = await connection.query( `DELETE FROM clinical_case_specialities WHERE speciality_id < '113';` );
+		console.log('Nº FILAS ELIMINADAS', r[0].affectedRows);
 
 		console.log('\n/////////////////////////////////////////////////////////////////////');
 		console.log('/////////                                                   /////////');
@@ -169,7 +169,7 @@ async function leer_e_insertar() {
 
 		// BUSCAR TODAS LAS ESPECIALIDADES DE INTERES DE LOS USUARIOS
 		[rows] = await connection.query(
-			`SELECT speciality_id AS id, s.name AS nombre, user_id AS user
+			`SELECT su.speciality_id AS id, s.name AS nombre, su.user_id AS user
 			FROM specialities s, speciality_users su
 			WHERE su.speciality_id = s.id`
 		);
@@ -198,6 +198,12 @@ async function leer_e_insertar() {
 		console.log('Nº DE ESPECIALIDADS DE INTERES ACTUALIZADOS: ' + cont);
 		console.log('Nº DE ERRORES: ' + cant);
 
+		// ELIMINAR LAS ESPECIALIDADES DE INTERES ANTIGUAS
+		console.log('\n//////////////      ELIMINANDO LAS ESPECIALIDADES DE INTERES ANTIGUAS...     ///////////////');
+		r = await connection.query( `DELETE FROM speciality_users WHERE speciality_id < '113';` );
+		console.log('Nº FILAS ELIMINADAS', r[0].affectedRows);
+
+		console.log('\n\n\n-----------------------------         -------------------------\n\n\n');
 		console.log('----------------------------------------------------------------------');
 		console.log('----------------------------------------------------------------------');
 		console.log('-----------------------       REVISANDO        -----------------------');
@@ -224,74 +230,19 @@ async function leer_e_insertar() {
 		[rows] = await connection.query(`SELECT COUNT(*) AS cant FROM sofi_production.users WHERE sub_speciality_id IS NULL;`);
 		console.log('Nº DE SUBESPECIALIDADS EN NULL: ' + rows[0].cant);
 
-		// BUSCAR EL ID DE LA ESPECIALIDAD 'OTRAS PROFESIONES/ESPECIALIDADES/INSTITUCIONES'
-		[rows] = await connection.query(
-			`SELECT id
-			FROM specialities
-			WHERE name = 'OTRAS PROFESIONES/ESPECIALIDADES/INSTITUCIONES';`
-		);
-
-		// REEMPLAZAR EL ID DE LAS ESPECIALIDADES QUE ESTEN EN NULL POR EL ID ANTERIOR
-		console.log('\n/////  REMPLAZANDO EL ID DE LAS ESPECIALIDADES QUE ESTEN EN NULL POR EL ID \'OTRAS PROFESIONES/ESPECIALIDADES/INSTITUCIONES\'  /////');
-		r = await connection.query(
-			`UPDATE users SET
-			speciality_id = ${rows[0].id}
-			WHERE speciality_id IS NULL;`
-		);
-		console.log('Nº ESPECIALIDADES ACTUALIZADAS:', r[0].info);
-
-		// REEMPLAZAR EL ID DE LAS SUBESPECIALIDADES QUE ESTEN EN NULL POR EL ID ANTERIOR
-		console.log('\n/////  REMPLAZANDO EL ID DE LAS SUBESPECIALIDADES QUE ESTEN EN NULL POR EL ID \'OTRAS PROFESIONES/ESPECIALIDADES/INSTITUCIONES\'  /////');
-		r = await connection.query(
-			`UPDATE users u SET
-			u.sub_speciality_id = ${rows[0].id}
-			WHERE u.sub_speciality_id IS NULL;`
-		);
-		console.log('Nº SUBESPECIALIDADES ACTUALIZADAS:', r[0].info);
-
 		// CONTAR LA CANTIDAD DE SUB/ESPECIALIDADES DE INTERES DE USUARIOS QUE NO SE ACTUALIZARON
 		console.log('\n///////////////     CONSULTANDO LOS USUARIOS CON ESPECIALIDADES ANTIGUAS     ///////////////');
 		[rows] = await connection.query(`SELECT COUNT(*) AS cant FROM sofi_production.speciality_users WHERE speciality_id < 113;`);
 		console.log('CANTIDAD DE ESPECIALIDADS DE INTERES NO ACTUALIZADAS: ' + rows[0].cant);
 
-		// BUSCAR TODAS LAS ESPECIALIDADES DE INTERES DE LOS USUARIOS
-		[rows] = await connection.query(
-			`SELECT speciality_id AS id, s.name AS nombre, user_id AS user
-			FROM specialities s, speciality_users su
-			WHERE su.speciality_id = s.id AND su.speciality_id < 113`
-		);
-
-		// REEMPLAZAR EL NOMBRE DE LAS ANTIGUAS ESPECIALIDADES/SUBESPECIALIDADES POR LAS NUEVAS
-		for(let i=0; i<rows.length; i++){
-			index0 = antes_desps.antes.findIndex(element => element === rows[i].nombre);
-			if(index0 != -1) rows[i].nombre = antes_desps.desps[index0]
-		}
-
-		// ACTUALIZAR EL ID DE LAS ANTIGUAS ESPECIALIDADES/SUBESPECIALIDADES POR LAS NUEVAS EN BD
-		console.log('\n/////  ACTUALIZANDO EL ID DE LAS ANTIGUAS (SUB)ESPECIALIDADES DE INTERES  /////');
-		date = new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
-		cont = 0; cant = 0;
-		for(let i=0; i<rows.length; i++){
-			try{
-				r = await connection.query(
-					`UPDATE speciality_users su SET su.speciality_id =
-					(SELECT s.id FROM specialities s WHERE s.name = '${rows[i].nombre}' AND s.id > 112),
-					updated_at = '${date}'
-					WHERE (su.speciality_id = ${rows[i].id} AND su.user_id = ${rows[i].user}) AND su.speciality_id < 113`
-				);
-				cont += r[0].affectedRows;
-			}catch(e){ cant++; }
-		}
-		console.log('Nº DE ESPECIALIDADS DE INTERES ACTUALIZADOS: ' + cont);
-		console.log('Nº DE ERRORES: ' + cant);
-
-/*
 		// ELIMNAR LAS ESPECIALIDADES ANTIGUAS
 		console.log('\n///////////     ELIMINANDO LAS ESPECIALIDADES ANTIGUAS     ////////////////');
 		try{
-			r = connection.query(`DELETE FROM sofi_production.specialities WHERE id < 113;`);
+			r = await connection.query(`DELETE FROM sofi_production.specialities WHERE id < 113;`);
+			console.log('Nº FILAS ELIMINADAS', r[0].affectedRows);
 		}catch(e){ console.log('ERROR', e) }
-		*/
+
+		console.log('\n\n\n-----------------------------         -------------------------\n\n\n');
 		console.log('\n////////////////////////////////////////////////////////////////////////////');
 		console.log('////////////////                                          ///////////////////');
 		console.log('\n///////////      ¡ESPECIALIDADES ANTIGUAS ELIMINANDAS!      ///////////////');
